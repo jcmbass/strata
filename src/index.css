@@ -1,10 +1,46 @@
 @import "tailwindcss";
 
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@theme {
+  --color-canvas: #0a0a0b;
+  --color-canvas-elevated: #111113;
+  --color-card-bg: #161618;
+  --color-card-border: #27272a;
+  --color-card-hover: #1c1c1f;
+  --color-accent: #6366f1;
+  --color-accent-glow: rgba(99, 102, 241, 0.15);
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-connector: #3f3f46;
+  --color-connector-active: #6366f1;
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
+  --color-toolbar-bg: #18181b;
+  --color-toolbar-border: #27272a;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
 }
 
-.animate-spin-slow {
-  animation: spin-slow 20s linear infinite;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
 }
