@@ -222,7 +222,7 @@ function EmptyState({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ActivityLog() {
+export function ChatPanel() {
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [input, setInput] = useState("");
 
