@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useAgentContext } from "../../agent/AgentProvider";
 import type { AgentLogEntry, AgentStatus } from "../../agent/useAgent";
+import { AsciiFlow } from "../agent/AscciFlow";
 
 // ---------------------------------------------------------------------------
 // Panel resize constants
@@ -194,7 +195,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-5 text-center">
-      
+      <AsciiFlow size={132} mood={status === "running" ? "thinking" : "smile"} />
       <div className="space-y-1">
         <p className="text-sm font-semibold text-text-primary">Strata Agent</p>
         <p className="text-xs text-text-muted leading-relaxed">
@@ -217,7 +218,11 @@ function EmptyState({
   );
 }
 
-export const ChatPanel = () => {
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export function ActivityLog() {
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [input, setInput] = useState("");
 
@@ -310,8 +315,24 @@ export const ChatPanel = () => {
     [status, submit]
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      if (e.key === "Escape" && status === "running") {
+        abort();
+      }
+    },
+    [handleSubmit, status, abort]
+  );
+
+  const canSubmit = input.trim().length > 0 && status !== "running";
+
   return (
-    <aside className="absolute right-0 top-0 bottom-0 z-30 flex flex-col border-l border-card-border bg-canvas-elevated/95 backdrop-blur-sm"
+    <aside
+      className="absolute right-0 top-0 bottom-0 z-30 flex flex-col border-l border-card-border bg-canvas-elevated/95 backdrop-blur-sm"
       style={{ width: panelWidth }}
       aria-label="Strata Agent chat panel"
     >
@@ -334,12 +355,12 @@ export const ChatPanel = () => {
       <div className="flex items-center justify-between border-b border-card-border px-4 py-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-text-primary">Agent</span>
-          <span className="text-xs text-text-muted">v0.1</span>
+          <StatusPill status={status} />
         </div>
         {status === "running" && (
           <button
             type="button"
-            onClick={undefined}
+            onClick={abort}
             className="focus-ring text-xs text-text-muted hover:text-text-primary border border-card-border hover:border-accent/30 rounded-lg px-2 py-1 transition-colors duration-150"
             aria-label="Abort agent"
           >
@@ -347,6 +368,7 @@ export const ChatPanel = () => {
           </button>
         )}
       </div>
+
       {/* Message list */}
       <div className="scrollbar-floating flex-1 overflow-y-auto p-3 space-y-3 scroll-smooth">
         {log.length === 0 ? (
@@ -386,7 +408,46 @@ export const ChatPanel = () => {
           </>
         )}
       </div>
-      <h2 className="text-lg font-bold mb-4">Activity Log</h2>
+
+      {/* Input area */}
+      <div className="border-t border-card-border p-3 flex-shrink-0">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={status === "running" ? "Agent is running…" : "Describe a pipeline…"}
+            disabled={status === "running"}
+            rows={1}
+            className="scrollbar-floating focus-ring flex-1 resize-none bg-card-bg border border-card-border rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted transition-colors duration-150 leading-relaxed disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ maxHeight: 120, overflowY: "hidden" }}
+            aria-label="Message input"
+          />
+          <button
+            type="button"
+            onClick={status === "running" ? abort : handleSubmit}
+            disabled={status !== "running" && !canSubmit}
+            className={`focus-ring flex-shrink-0 size-9 rounded-xl flex items-center justify-center transition-colors duration-150 ${
+              status === "running"
+                ? "bg-error/20 border border-error/40 text-error hover:bg-error/30"
+                : canSubmit
+                ? "bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30"
+                : "bg-card-bg border border-card-border text-text-muted cursor-not-allowed opacity-40"
+            }`}
+            aria-label={status === "running" ? "Stop agent" : "Send message"}
+          >
+            {status === "running" ? (
+              <span className="text-xs font-bold">✕</span>
+            ) : (
+              <span className="text-sm">↑</span>
+            )}
+          </button>
+        </div>
+        <p className="text-[10px] text-text-muted mt-1.5 px-1">
+          Enter to send · Shift+Enter for newline · Esc to abort
+        </p>
+      </div>
     </aside>
   );
 }
