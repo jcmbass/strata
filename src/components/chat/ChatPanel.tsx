@@ -189,31 +189,37 @@ function ErrorBubble({ content }: { content: string }) {
 function EmptyState({
   onHint,
   status,
+  emptyChat,
 }: {
   onHint: (hint: string) => void;
   status: AgentStatus;
+  emptyChat: boolean;
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-5 text-center">
       <AsciiFlow size={132} mood={status === "running" ? "thinking" : "smile"} />
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-text-primary">Strata Agent</p>
-        <p className="text-xs text-text-muted leading-relaxed">
-          Describe a pipeline and watch it build on the canvas
-        </p>
-      </div>
-      <div className="flex flex-col gap-1.5 w-full">
-        {HINTS.map((hint) => (
-          <button
-            key={hint}
-            type="button"
-            onClick={() => onHint(hint)}
-            className="focus-ring text-left text-xs text-text-muted hover:text-text-secondary border border-card-border hover:border-accent/30 hover:bg-accent/5 rounded-xl px-3 py-2 transition-colors duration-150"
-          >
-            {hint}
-          </button>
-        ))}
-      </div>
+      {emptyChat &&
+        <>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-text-primary">Strata Agent</p>
+            <p className="text-xs text-text-muted leading-relaxed">
+              Describe a pipeline and watch it build on the canvas
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 w-full">
+            {HINTS.map((hint) => (
+              <button
+                key={hint}
+                type="button"
+                onClick={() => onHint(hint)}
+                className="focus-ring text-left text-xs text-text-muted hover:text-text-secondary border border-card-border hover:border-accent/30 hover:bg-accent/5 rounded-xl px-3 py-2 transition-colors duration-150"
+              >
+                {hint}
+              </button>
+            ))}
+          </div>
+        </>
+      }
     </div>
   );
 }
@@ -371,42 +377,37 @@ export function ChatPanel() {
 
       {/* Message list */}
       <div className="scrollbar-floating flex-1 overflow-y-auto p-3 space-y-3 scroll-smooth">
-        {log.length === 0 ? (
-          <EmptyState onHint={handleHint} status={status} />
-        ) : (
-          <>
-            {groups.map((group) => {
-              if (group.kind === "step") {
-                return <StepRow key={group.call.id} call={group.call} result={group.result} />;
-              }
-              const { entry } = group;
-              if (entry.type === "user") {
-                return <UserBubble key={entry.id} content={entry.content} />;
-              }
-              if (entry.type === "assistant") {
-                const isActive = status === "running" && entry.id === lastAssistantId;
-                // Was this assistant's JSON content absorbed by an apply_canvas_ops tool_call later in the log?
-                const idx = log.findIndex((e) => e.id === entry.id);
-                const absorbed = log
-                  .slice(idx + 1)
-                  .some((e) => e.type === "tool_call" && e.toolName === "apply_canvas_ops");
-                return (
-                  <AssistantBubble
-                    key={entry.id}
-                    content={entry.content}
-                    isStreaming={isActive}
-                    absorbed={absorbed}
-                  />
-                );
-              }
-              if (entry.type === "error") {
-                return <ErrorBubble key={entry.id} content={entry.content} />;
-              }
-              return null;
-            })}
-            <div ref={bottomRef} />
-          </>
-        )}
+        <EmptyState onHint={handleHint} status={status} emptyChat={groups.length === 0} />
+        {groups.map((group) => {
+          if (group.kind === "step") {
+            return <StepRow key={group.call.id} call={group.call} result={group.result} />;
+          }
+          const { entry } = group;
+          if (entry.type === "user") {
+            return <UserBubble key={entry.id} content={entry.content} />;
+          }
+          if (entry.type === "assistant") {
+            const isActive = status === "running" && entry.id === lastAssistantId;
+            // Was this assistant's JSON content absorbed by an apply_canvas_ops tool_call later in the log?
+            const idx = log.findIndex((e) => e.id === entry.id);
+            const absorbed = log
+              .slice(idx + 1)
+              .some((e) => e.type === "tool_call" && e.toolName === "apply_canvas_ops");
+            return (
+              <AssistantBubble
+                key={entry.id}
+                content={entry.content}
+                isStreaming={isActive}
+                absorbed={absorbed}
+              />
+            );
+          }
+          if (entry.type === "error") {
+            return <ErrorBubble key={entry.id} content={entry.content} />;
+          }
+          return null;
+        })}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input area */}
@@ -428,13 +429,12 @@ export function ChatPanel() {
             type="button"
             onClick={status === "running" ? abort : handleSubmit}
             disabled={status !== "running" && !canSubmit}
-            className={`focus-ring flex-shrink-0 size-9 rounded-xl flex items-center justify-center transition-colors duration-150 ${
-              status === "running"
-                ? "bg-error/20 border border-error/40 text-error hover:bg-error/30"
-                : canSubmit
+            className={`focus-ring flex-shrink-0 size-9 rounded-xl flex items-center justify-center transition-colors duration-150 ${status === "running"
+              ? "bg-error/20 border border-error/40 text-error hover:bg-error/30"
+              : canSubmit
                 ? "bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30"
                 : "bg-card-bg border border-card-border text-text-muted cursor-not-allowed opacity-40"
-            }`}
+              }`}
             aria-label={status === "running" ? "Stop agent" : "Send message"}
           >
             {status === "running" ? (
