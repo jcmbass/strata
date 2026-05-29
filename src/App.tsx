@@ -1,7 +1,7 @@
 import { CanvasProvider } from "./context/CanvasContext";
 import { PipelineRunnerProvider } from "./components/canvas/PipelineRunnerContext";
 import { DrawboardCanvas } from "./components/canvas/DrawboardCanvas";
-import { ActivityLog } from "./components/activity/ActivityLog";
+import { ChatPanel } from "./components/chat/ChatPanel";
 
 export default function App() {
   return (
@@ -9,7 +9,7 @@ export default function App() {
       <PipelineRunnerProvider>
         <div className="relative h-full w-full overflow-hidden bg-canvas">
           <DrawboardCanvas />
-          <ActivityLog />
+          <ChatPanel />
         </div>
       </PipelineRunnerProvider>
     </CanvasProvider>
