@@ -45,6 +45,136 @@ body {
   width: 100vw;
 }
 
+/* Card enter animation — plays on mount (agent-created and user-created cards) */
+@keyframes card-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Streaming cursor blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 0.85em;
+  background: var(--color-accent);
+  border-radius: 1px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.9s step-start infinite;
+}
+
+/* Pretext rich-inline fragment styles */
+.frag {
+  display: inline;
+  white-space: pre;
+}
+
+.frag--body {
+  color: var(--color-text-secondary);
+}
+
+.frag--code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-accent);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.frag--link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.frag--chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+@keyframes log-line-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes palette-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: palette-in 120ms ease-out both;
+}
+
+/*
+ * Floating pill scrollbar — overlays the content instead of reserving gutter,
+ * uses a translucent rounded thumb, transparent track. Used by the chat
+ * textarea so the input doesn't ship the chunky native Linux scrollbar.
+ *
+ * Browser support is split: Firefox uses the standard `scrollbar-*`
+ * properties; WebKit / Chromium need `::-webkit-scrollbar` pseudo-elements.
+ * We set both. When content doesn't overflow no thumb renders.
+ */
+.scrollbar-floating {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-gutter: auto;
+}
+.scrollbar-floating::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+.scrollbar-floating::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-floating::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+.scrollbar-floating::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+  background-clip: content-box;
+}
+.scrollbar-floating::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Connector draw-in: line traces from source to target when a connection appears. */
+@keyframes connector-draw {
+  from { stroke-dashoffset: var(--connector-len, 200); }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Pulse used for cards that are queued in the next pipeline wave. */
+@keyframes queued-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.0); }
+  50%      { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
+}
+
+.is-queued {
+  animation: queued-pulse 1.4s ease-in-out infinite;
+}
+
 /*
  * Reusable focus ring. Replaces the patchwork of focus:border-* / focus:ring-*
  * across the app so every interactive surface shares the same visual.
@@ -57,3 +187,73 @@ body {
   box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-accent);
   border-color: var(--color-accent) !important;
 }
+
+/*
+ * Strictly disable motion when the user prefers reduced motion.
+ * This is the accessibility-first stance: kill animations and transitions,
+ * keep colours/transforms static. The cursor blink, log-line fade, card
+ * appear, queued pulse and connector draw all collapse to instant state.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Typing/working indicator dots. Replaces Tailwind's animate-bounce (a dated
+ * keyframe with a hard parabolic bounce) with an ease-out-expo lift + fade —
+ * objects in the real world decelerate, they don't bounce.
+ */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50%      { opacity: 1; transform: translateY(-2px); }
+}
+.animate-dot-pulse {
+  animation: dot-pulse 1.1s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/*
+ * AsciiFlow — Pretext-driven ASCII flow field used as the agent "logo".
+ * Variable typographic weights/alphas mirror brightness in the simulation.
+ * See src/components/agent/AsciiFlow.tsx.
+ */
+.af-box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.af-row {
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
+  white-space: pre;
+  font-family: Georgia, Palatino, "Times New Roman", serif;
+  font-size: 11px;
+  color: var(--color-accent);
+}
+.af-w300 { font-weight: 300; }
+.af-w500 { font-weight: 500; }
+.af-w800 { font-weight: 800; }
+.af-it   { font-style: italic; }
+.af-a2  { opacity: 0.18; }
+.af-a3  { opacity: 0.28; }
+.af-a4  { opacity: 0.38; }
+.af-a5  { opacity: 0.50; }
+.af-a6  { opacity: 0.62; }
+.af-a7  { opacity: 0.74; }
+.af-a8  { opacity: 0.84; }
+.af-a9  { opacity: 0.92; }
+.af-a10 { opacity: 1.00; }
