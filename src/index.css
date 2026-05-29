@@ -44,3 +44,16 @@ body {
   height: 100vh;
   width: 100vw;
 }
+
+/*
+ * Reusable focus ring. Replaces the patchwork of focus:border-* / focus:ring-*
+ * across the app so every interactive surface shares the same visual.
+ */
+.focus-ring {
+  outline: none;
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-accent);
+  border-color: var(--color-accent) !important;
+}
