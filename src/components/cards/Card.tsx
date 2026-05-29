@@ -2,7 +2,10 @@ import { memo, useCallback, useMemo, useRef, useEffect } from "react";
 import type { CardData, TechKey } from "../../types";
 import { useCanvasDispatch, useCanvasState } from "../../context/CanvasContext";
 import { generateId } from "../../utils/id";
+import { useLogReflow, type SourceLogLine } from "../../pretext/useLogReflow";
 import { detectTech, TECH_META } from "./cardTech";
+import { getTemplate, type LogLine } from "./cardLogs";
+import { useCardRunner } from "./useCardRunner";
 
 interface CardProps {
   card: CardData;
@@ -14,6 +17,26 @@ const TERMINAL_PADDING = 12;
 const TERMINAL_LINE_HEIGHT = 16;
 const MIN_TERMINAL_HEIGHT = 80;
 const TERMINAL_FONT = '11px ui-monospace, Consolas, "Liberation Mono", monospace';
+// Width reserved for the accent `$` prompt + its trailing space on the cmd line.
+// Hard-coded because the prompt glyph is always 1 char at 11px monospace.
+const PROMPT_INDENT = 14;
+
+function kindToClass(kind: LogLine["kind"]): string {
+  switch (kind) {
+    case "cmd":
+      return "text-text-primary";
+    case "info":
+      return "text-text-secondary";
+    case "dim":
+      return "text-text-muted";
+    case "success":
+      return "text-success";
+    case "warn":
+      return "text-warning";
+    case "error":
+      return "text-error";
+  }
+}
 
 /* ── Hoisted static SVG elements ── */
 
@@ -106,6 +129,7 @@ export const Card = memo(function Card({ card }: CardProps) {
   const techMeta = TECH_META[tech];
   const runState = card.runState ?? "idle";
   const isQueued = false;
+  const { visibleLines, play } = useCardRunner(id, tech, runState, card.customLogs);
 
   const dragStartPos = useRef(position);
 
@@ -157,7 +181,76 @@ export const Card = memo(function Card({ card }: CardProps) {
     },
     []
   );
+
+  // Compose the source lines the terminal should display. Logic:
+  //  - Idle state: show only the cmd-preview line (so the user knows what
+  //    will run) — derived from the agent override if any, otherwise from
+  //    the tech template.
+  //  - Running / success: show whatever the runner has streamed so far.
+  //
+  // The cmd-preview line is taken from card.customLogs[0] when the agent
+  // gave us an override AND that line is kind="cmd"; otherwise we fall back
+  // to the tech template's cmd. If customLogs has no cmd-kind first line
+  // (the agent didn't include one), we suppress the `$` prompt entirely so
+  // we don't fake a prompt the agent didn't author.
+  const tplCmdText = getTemplate(tech).cmd;
+  const previewCmd = useMemo<SourceLogLine<LogLine["kind"]> | null>(() => {
+    const override = card.customLogs?.[0];
+    if (override) {
+      if (override.kind === "cmd") return { text: override.text, kind: "cmd" };
+      // Custom logs that don't start with a cmd line — preview the first
+      // line as-is (no `$` prompt) so the user still sees something.
+      return { text: override.text, kind: override.kind };
+    }
+    return { text: tplCmdText, kind: "cmd" };
+  }, [card.customLogs, tplCmdText]);
+
+  const logSource = useMemo<SourceLogLine<LogLine["kind"]>[]>(() => {
+    if (visibleLines.length === 0) {
+      return previewCmd ? [previewCmd] : [];
+    }
+    return visibleLines.map((l) => ({ text: l.text, kind: l.kind }));
+  }, [previewCmd, visibleLines]);
+
+  // Only indent the first row if its source line is kind="cmd" (the `$`
+  // overlay only renders in that case).
+  const showPromptOverlay = logSource[0]?.kind === "cmd"; 
+  const firstRowIndents = useMemo(
+    () => (showPromptOverlay ? [PROMPT_INDENT] : []),
+    [showPromptOverlay]
+  );
+
+  const terminalBodyWidth = Math.max(60, size.width - TERMINAL_PADDING * 2);
+  const { rows, totalHeight: reflowHeight } = useLogReflow(
+    logSource,
+    TERMINAL_FONT,
+    terminalBodyWidth,
+    TERMINAL_LINE_HEIGHT,
+    { firstRowIndents }
+  )
+
+  // Auto-scroll terminal to bottom when new lines arrive
+  const terminalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+  }, [reflowHeight]);
+
+  const terminalHeight = Math.max(MIN_TERMINAL_HEIGHT, size.height - HEADER_HEIGHT - FOOTER_HEIGHT);
+  const durationLabel =
+    runState === "success" && card.runDurationMs
+      ? `${(card.runDurationMs / 1000).toFixed(2)}s`
+      : runState === "running"
+        ? "running…"
+        : "idle";
+
   return (
+    // A pipeline card is an intentionally selectable canvas widget living
+    // inside role="application" (the canvas), where custom keyboard/pointer
+    // interaction is expected. It can't be a single <button> because it
+    // contains its own controls (play button, resize handles) — nesting
+    // buttons is invalid — so it stays a labelled region that is Tab-focusable
+    // and Enter/Space-selectable.
+    // oxlint-disable-next-line react-doctor/no-noninteractive-element-interactions
     <section
       className={`absolute rounded-xl border shadow-lg overflow-hidden transition-colors duration-150 ${isQueued ? "is-queued " : ""
         }${isSelected
@@ -189,6 +282,19 @@ export const Card = memo(function Card({ card }: CardProps) {
       </div>
 
       {/* Terminal body — absolutely positioned rows so Pretext owns the layout */}
+      <div
+        ref={terminalRef}
+        className="scrollbar-floating font-mono text-[11px] leading-[16px] overflow-y-auto select-text relative"
+        style={{
+          height: terminalHeight,
+          padding: TERMINAL_PADDING,
+          background: "rgba(8, 10, 14, 0.55)",
+        }}
+      >
+        <div>
+          
+        </div>
+      </div>
 
       {/* Footer */}
       <div>
