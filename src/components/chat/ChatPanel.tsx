@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useAgentContext } from "../../agent/AgentProvider";
 import type { AgentLogEntry, AgentStatus } from "../../agent/useAgent";
-import { AsciiFlow } from "../agent/AscciFlow";
+import { AsciiFlow, type AsciiFlowMood } from "../agent/AscciFlow";
+import { usePipelineRunner } from "../canvas/PipelineRunnerContext";
 
 // ---------------------------------------------------------------------------
 // Panel resize constants
@@ -74,14 +75,20 @@ function StatusPill({ status }: { status: AgentStatus }) {
   );
 }
 
-function UserBubble({ content }: { content: string }) {
+function UserBubble({ content, editingCardTitle }: { content: string; editingCardTitle?: string }) {
   return (
-    <div className="flex justify-end">
+    <div className="flex flex-col items-end gap-1">
       <div className="max-w-[88%] rounded-2xl rounded-tr-sm bg-accent/15 border border-accent/25 px-3 py-2">
         <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap break-words">
           {content}
         </p>
       </div>
+      {editingCardTitle && (
+        <span className="text-[10px] text-accent/55 font-medium flex items-center gap-1 px-1">
+          <span className="size-1 rounded-full bg-accent/50" />
+          Editing: {editingCardTitle}
+        </span>
+      )}
     </div>
   );
 }
@@ -188,16 +195,16 @@ function ErrorBubble({ content }: { content: string }) {
 
 function EmptyState({
   onHint,
-  status,
+  mood,
   emptyChat,
 }: {
   onHint: (hint: string) => void;
-  status: AgentStatus;
+  mood: AsciiFlowMood;
   emptyChat: boolean;
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-5 text-center">
-      <AsciiFlow size={132} mood={status === "running" ? "thinking" : "smile"} />
+      <AsciiFlow mood={mood} />
       {emptyChat &&
         <>
           <div className="space-y-1">
@@ -238,7 +245,37 @@ export function ChatPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { status, log, submit, abort, inputRef } = useAgentContext();
+  const { status, log, submit, abort, inputRef, editingCardId, editingCardTitle, setEditingCard } = useAgentContext();
+  const { isRunning: pipelineRunning } = usePipelineRunner();
+
+  // Brief celebratory window after a pipeline run finishes, so the face cheers
+  // before settling back to its calm smile.
+  const [celebrating, setCelebrating] = useState(false);
+  const prevPipelineRunning = useRef(false);
+  useEffect(() => {
+    if (prevPipelineRunning.current && !pipelineRunning) {
+      setCelebrating(true);
+      const t = setTimeout(() => setCelebrating(false), 3200);
+      prevPipelineRunning.current = pipelineRunning;
+      return () => clearTimeout(t);
+    }
+    prevPipelineRunning.current = pipelineRunning;
+  }, [pipelineRunning]);
+
+  // Face mood. The agent chatting takes precedence, then the live pipeline run,
+  // then the post-run cheer, then the agent's resting status.
+  const faceMood: AsciiFlowMood =
+    status === "running"
+      ? "thinking"
+      : pipelineRunning
+        ? "excited"
+        : celebrating
+          ? "happy"
+          : status === "error"
+            ? "concerned"
+            : status === "done"
+              ? "happy"
+              : "smile";
 
   // Expose the textarea to the agent context so the command palette can focus it.
   useEffect(() => {
@@ -377,14 +414,14 @@ export function ChatPanel() {
 
       {/* Message list */}
       <div className="scrollbar-floating flex-1 overflow-y-auto p-3 space-y-3 scroll-smooth">
-        <EmptyState onHint={handleHint} status={status} emptyChat={groups.length === 0} />
+        <EmptyState onHint={handleHint} mood={faceMood} emptyChat={groups.length === 0} />
         {groups.map((group) => {
           if (group.kind === "step") {
             return <StepRow key={group.call.id} call={group.call} result={group.result} />;
           }
           const { entry } = group;
           if (entry.type === "user") {
-            return <UserBubble key={entry.id} content={entry.content} />;
+            return <UserBubble key={entry.id} content={entry.content} editingCardTitle={entry.editingCardTitle} />;
           }
           if (entry.type === "assistant") {
             const isActive = status === "running" && entry.id === lastAssistantId;
@@ -412,6 +449,23 @@ export function ChatPanel() {
 
       {/* Input area */}
       <div className="border-t border-card-border p-3 flex-shrink-0">
+        {/* Editing card indicator */}
+        {editingCardId && editingCardTitle && (
+          <div className="flex items-center gap-1.5 mb-2 px-1">
+            <span className="text-[11px] font-medium text-accent/70 bg-accent/10 border border-accent/20 rounded-md px-2 py-0.5 flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-accent/60" />
+              Editing: {editingCardTitle}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingCard(null)}
+              className="text-text-muted hover:text-text-primary transition-colors text-xs leading-none"
+              aria-label="Clear editing card"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}

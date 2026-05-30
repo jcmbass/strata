@@ -1,12 +1,13 @@
 import { useEffect, useCallback } from "react";
 import { useCanvasState, useCanvasDispatch } from "../../context/CanvasContext";
 import { generateId } from "../../utils/id";
+import { useAgentContext } from "../../agent/AgentProvider";
 import type { ToolbarAction, CardData, TechKey } from "../../types";
 
 const ACTIONS: { action: ToolbarAction; label: string; shortcut: string }[] = [
     { action: "add-card", label: "Add Stage", shortcut: "A" },
     { action: "connect", label: "Connect", shortcut: "C" },
-    { action: "ai-run", label: "AI Run", shortcut: "R" },
+    { action: "ask-agent", label: "Edit Agent", shortcut: "R" },
     { action: "delete", label: "Delete", shortcut: "Del" },
 ];
 
@@ -34,9 +35,10 @@ function createCard(x: number, y: number): CardData {
 }
 
 export function FloatingToolbar() {
-    const { toolbarVisible, toolbarPosition, selectedCardId, viewport } =
+    const { toolbarVisible, toolbarPosition, selectedCardId, viewport, cards } =
         useCanvasState();
     const dispatch = useCanvasDispatch();
+    const { setEditingCard, inputRef } = useAgentContext();
 
     const hide = useCallback(() => {
         dispatch({ type: "HIDE_TOOLBAR" });
@@ -68,6 +70,13 @@ export function FloatingToolbar() {
             if (selectedCardId) {
                 dispatch({ type: "START_CONNECTING", fromId: selectedCardId });
             }
+        } else if (action === "ask-agent") {
+            if (selectedCardId) {
+                const card = cards.find((c) => c.id === selectedCardId);
+                setEditingCard(selectedCardId, card?.title ?? null);
+                // Focus the chat input so the user can type immediately
+                inputRef.current?.focus();
+            }
         } else if (action === "delete") {
             if (selectedCardId) {
                 dispatch({ type: "DELETE_CARD", id: selectedCardId });
@@ -88,7 +97,8 @@ export function FloatingToolbar() {
                 {ACTIONS.map(({ action, label, shortcut }) => {
                     const disabled =
                         (action === "delete" && !selectedCardId) ||
-                        (action === "connect" && !selectedCardId);
+                        (action === "connect" && !selectedCardId) || 
+                        (action === "ask-agent" && !selectedCardId);
                     return (
                         <button
                             key={action}

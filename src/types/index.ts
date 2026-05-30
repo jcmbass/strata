@@ -54,7 +54,7 @@ export interface CanvasViewport {
     scale: number;
 }
 
-export type ToolbarAction = "add-card" | "connect" | "ai-run" | "delete";
+export type ToolbarAction = "add-card" | "connect" | "ask-agent" | "delete";
 
 export interface CanvasState {
     cards: CardData[];
