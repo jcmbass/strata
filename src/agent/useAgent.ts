@@ -21,6 +21,8 @@ export interface AgentLogEntry {
     callId?: string;
     toolName?: string;
     success?: boolean;
+    /** When the user message was sent while editing a specific card */
+    editingCardTitle?: string;
 }
 
 let _idCounter = 0;
@@ -39,6 +41,8 @@ function uid() {
 export function useAgent() {
     const [status, setStatus] = useState<AgentStatus>("idle");
     const [log, setLog] = useState<AgentLogEntry[]>([]);
+    const [editingCardId, setEditingCardId] = useState<string | null>(null);
+    const [editingCardTitle, setEditingCardTitle] = useState<string | null>(null);
 
     // Conversation history — user+assistant pairs sent to the server each turn.
     const historyRef = useRef<ChatMessage[]>([]);
@@ -58,6 +62,11 @@ export function useAgent() {
         setLog((prev) => [...prev, entry]);
     }, []);
 
+    const setEditingCard = useCallback((id: string | null, title?: string | null) => {
+        setEditingCardId(id);
+        setEditingCardTitle(title ?? null);
+    }, []);
+
     const submit = useCallback(
         async (message: string) => {
             if (status === "running") return;
@@ -67,8 +76,22 @@ export function useAgent() {
             abortRef.current = controller;
             setStatus("running");
 
-            // User message entry
-            appendEntry({ id: uid(), type: "user", content: message });
+            // Capture editing context before clearing it
+            const cardId = editingCardId;
+            const cardTitle = editingCardTitle;
+            const finalMessage = cardId ? `[edit card: ${cardId}] ${message}` : message;
+
+            // Clear editing indicator from input (it moves to the bubble)
+            setEditingCardId(null);
+            setEditingCardTitle(null);
+
+            // User message entry — store original message for display; card ID lives in finalMessage sent to the agent
+            appendEntry({
+                id: uid(),
+                type: "user",
+                content: message,
+                editingCardTitle: cardTitle ?? undefined,
+            });
 
             // Placeholder for streaming assistant response
             const assistantId = uid();
@@ -80,7 +103,7 @@ export function useAgent() {
             const stateAtSubmit = canvasState;
 
             await runAgent(
-                message,
+                finalMessage,
                 historyRef.current,
                 {
                     getCanvasState: () => stateAtSubmit,
@@ -120,7 +143,7 @@ export function useAgent() {
                         const assistantContent = assistantContentRef.current;
                         historyRef.current = [
                             ...historyRef.current,
-                            { role: "user", content: message },
+                            { role: "user", content: finalMessage },
                             ...(assistantContent
                                 ? [{ role: "assistant" as const, content: assistantContent }]
                                 : []),
@@ -145,7 +168,7 @@ export function useAgent() {
                 controller.signal
             );
         },
-        [status, canvasState, canvasDispatch, pushCommandSilent, appendEntry]
+        [status, canvasState, canvasDispatch, pushCommandSilent, appendEntry, editingCardId, editingCardTitle]
     );
 
     const abort = useCallback(() => {
@@ -158,5 +181,5 @@ export function useAgent() {
         historyRef.current = [];
     }, []);
 
-    return { status, log, submit, abort, clearLog };
+    return { status, log, submit, abort, clearLog, editingCardId, editingCardTitle, setEditingCard };
 }
