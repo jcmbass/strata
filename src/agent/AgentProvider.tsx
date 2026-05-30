@@ -7,6 +7,9 @@ interface AgentContextValue {
   submit: (message: string) => void;
   abort: () => void;
   clearLog: () => void;
+  editingCardId: string | null;
+  editingCardTitle: string | null;
+  setEditingCard: (id: string | null, title?: string | null) => void;
   /** Ref the chat input registers itself into so the command palette can focus it. */
   inputRef: RefObject<HTMLTextAreaElement | null>;
 }
