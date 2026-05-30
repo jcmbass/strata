@@ -1,9 +1,12 @@
 import { memo, useCallback, useMemo, useRef, useEffect } from "react";
 import type { CardData, TechKey } from "../../types";
+import { useDrag } from "../../hooks/useDrag";
+import { useResize } from "../../hooks/useResize";
 import { useCanvasDispatch, useCanvasState } from "../../context/CanvasContext";
 import { generateId } from "../../utils/id";
 import { useLogReflow, type SourceLogLine } from "../../pretext/useLogReflow";
-import { detectTech, TECH_META } from "./cardTech";
+import { TechIcon } from "./TechIcon";
+import { TECH_META, detectTech } from "./cardTech";
 import { getTemplate, type LogLine } from "./cardLogs";
 import { useCardRunner } from "./useCardRunner";
 
@@ -133,6 +136,24 @@ export const Card = memo(function Card({ card }: CardProps) {
 
   const dragStartPos = useRef(position);
 
+  const handleDragEnd = useCallback(
+    (pos: { x: number; y: number }) => {
+      dispatch({ type: "MOVE_CARD", id, position: pos });
+    },
+    [dispatch, id]
+  );
+
+  const handleResize = useCallback(
+    (newSize: { width: number; height: number }, newPos: { x: number; y: number }) => {
+      dispatch({ type: "RESIZE_CARD", id, size: newSize });
+      dispatch({ type: "MOVE_CARD", id, position: newPos });
+    },
+    [dispatch, id]
+  );
+
+  const drag = useDrag(handleDragEnd, viewport.scale);
+  const resize = useResize(handleResize, viewport.scale);
+
   const isSelected = selectedCardId === id;
   const isConnectingFrom = connectingFromId === id;
   const isConnectingTarget = connectingFromId !== null && connectingFromId !== id;
@@ -154,6 +175,14 @@ export const Card = memo(function Card({ card }: CardProps) {
       dispatch({ type: "SELECT_CARD", id });
     }
   }, [connectingFromId, id, dispatch]);
+
+  const onHeaderPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      dragStartPos.current = position;
+      drag.onPointerDown(e, position);
+    },
+    [drag, position]
+  );
 
   const handleCardClick = useCallback(
     (e: React.MouseEvent) => {
@@ -178,8 +207,9 @@ export const Card = memo(function Card({ card }: CardProps) {
   const handlePlay = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      play();
     },
-    []
+    [play]
   );
 
   // Compose the source lines the terminal should display. Logic:
@@ -214,7 +244,7 @@ export const Card = memo(function Card({ card }: CardProps) {
 
   // Only indent the first row if its source line is kind="cmd" (the `$`
   // overlay only renders in that case).
-  const showPromptOverlay = logSource[0]?.kind === "cmd"; 
+  const showPromptOverlay = logSource[0]?.kind === "cmd";
   const firstRowIndents = useMemo(
     () => (showPromptOverlay ? [PROMPT_INDENT] : []),
     [showPromptOverlay]
@@ -277,8 +307,19 @@ export const Card = memo(function Card({ card }: CardProps) {
       onKeyDown={handleCardKeyDown}
     >
       {/* Header — drag handle */}
-      <div>
-        <StatusGlyph state={card.runState ?? "idle"} color="#4F46E5" onPlay={handlePlay} />
+      <div
+        className="flex items-center gap-2 border-b border-card-border bg-canvas-elevated px-3 cursor-grab active:cursor-grabbing"
+        style={{ height: HEADER_HEIGHT }}
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+      >
+        <TechIcon tech={tech} size={16} />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium text-text-primary truncate select-none">{title}</h3>
+          <div className="text-[10px] text-text-muted leading-none select-none">{techMeta.label}</div>
+        </div>
+        <StatusGlyph state={runState} color={techMeta.color} onPlay={handlePlay} />
       </div>
 
       {/* Terminal body — absolutely positioned rows so Pretext owns the layout */}
@@ -291,15 +332,81 @@ export const Card = memo(function Card({ card }: CardProps) {
           background: "rgba(8, 10, 14, 0.55)",
         }}
       >
-        <div>
-          
+        <div className="relative" style={{ height: Math.max(reflowHeight, TERMINAL_LINE_HEIGHT) }}>
+          {/* Accent `$` prompt overlay — only when the first source line is a
+              cmd. The cmd row is indented by PROMPT_INDENT to leave room. */}
+          {showPromptOverlay && (
+            <span
+              className="absolute text-accent select-none"
+              style={{ left: 0, top: 0, height: TERMINAL_LINE_HEIGHT, lineHeight: `${TERMINAL_LINE_HEIGHT}px` }}
+              aria-hidden
+            >
+              $
+            </span>
+          )}
+
+          {rows.map((row, i) => (
+            <div
+              key={`row-${row.sourceIndex}-${i}`}
+              className={`absolute ${kindToClass(row.kind)}`}
+              style={{
+                left: row.x,
+                top: row.y,
+                width: row.width,
+                height: TERMINAL_LINE_HEIGHT,
+                lineHeight: `${TERMINAL_LINE_HEIGHT}px`,
+                whiteSpace: "nowrap",
+                animation: row.sourceIndex > 0 && row.isFirstRow
+                  ? "log-line-in 180ms ease-out both"
+                  : undefined,
+              }}
+            >
+              {row.text}
+            </div>
+          ))}
         </div>
+
+        {runState === "idle" && visibleLines.length === 0 && (
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-muted/70 italic select-none pointer-events-none whitespace-nowrap"
+            style={{ fontSize: 12 }}
+          >
+            press ▶ to simulate this step
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div>
-        <span>Footer</span>
+      <div
+        className="flex items-center justify-between border-t border-card-border bg-canvas-elevated/60 px-3 text-[10px] text-text-muted select-none"
+        style={{ height: FOOTER_HEIGHT }}
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="size-1 rounded-full" style={{ background: techMeta.color, opacity: 0.7 }} />
+          {techMeta.label}
+        </span>
+        <span className="font-mono">{durationLabel}</span>
       </div>
+
+      {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+        <div
+          key={corner}
+          className={`absolute size-3 rounded-sm border border-card-border bg-card-bg hover:border-accent hover:bg-accent transition-colors cursor-${corner}-resize`}
+          style={
+            corner === "nw" || corner === "ne"
+              ? { top: -4, [corner === "nw" ? "left" : "right"]: -4 }
+              : { bottom: -4, [corner === "sw" ? "left" : "right"]: -4 }
+          }
+          aria-label={`Resize from ${corner} corner`}
+          data-resize-handle
+          tabIndex={-1}
+          onPointerDown={(e) =>
+            resize.onPointerDown(e, corner as "nw" | "ne" | "sw" | "se", size, position)
+          }
+          onPointerMove={resize.onPointerMove}
+          onPointerUp={resize.onPointerUp}
+        />
+      ))}
     </section>
   );
 });
